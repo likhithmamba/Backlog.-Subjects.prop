@@ -16,8 +16,17 @@ import ProgressTracker from "./components/ProgressTracker";
 import ModuleHeatmap from "./components/ModuleHeatmap";
 import PastPapersVault from "./components/PastPapersVault";
 import BacklogShortlist from "./components/BacklogShortlist";
+import OnboardingFlow from "./components/OnboardingFlow";
+import DashboardInsights from "./components/DashboardInsights";
+import FlashcardsView from "./components/FlashcardsView";
+import MockTestView from "./components/MockTestView";
 
 export default function App() {
+  // Theme State
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    return (localStorage.getItem("theme") as "dark" | "light") || "dark";
+  });
+
   // Dropdown Selection States
   const [univ, setUniv] = useState<string>("");
   const [scheme, setScheme] = useState<string>("");
@@ -37,7 +46,7 @@ export default function App() {
   const [questionStatus, setQuestionStatus] = useState<Record<string, "todo" | "doing" | "done">>({});
   
   // Tab control in Subject Dashboard
-  const [activeTab, setActiveTab] = useState<"shortlist" | "questions" | "study-plan" | "sessional-vault">("shortlist");
+  const [activeTab, setActiveTab] = useState<"shortlist" | "questions" | "study-plan" | "sessional-vault" | "flashcards" | "mock-tests">("shortlist");
 
   // API Key Warning state
   const [hasApiKey, setHasApiKey] = useState<boolean>(true);
@@ -49,6 +58,7 @@ export default function App() {
     const isNoteAttached = !!localStorage.getItem(`notes-${currentSubject?.id}`) && 
       JSON.parse(localStorage.getItem(`notes-${currentSubject?.id}`) || "{}")[q.id];
     const yearsRange = [2021, 2022, 2023, 2024, 2025];
+    const isDark = theme === "dark";
     
     return (
       <div 
@@ -56,22 +66,38 @@ export default function App() {
         id={`question-card-${q.id}`}
         className={`p-4 rounded-xl border transition-all duration-200 flex flex-col justify-between space-y-3.5 hover:shadow-xs relative ${
           activeQuestion?.id === q.id 
-            ? "border-indigo-600 bg-indigo-50/15 ring-2 ring-indigo-600/5 shadow-xs" 
-            : "border-slate-200 bg-white hover:border-slate-350"
+            ? isDark
+              ? "border-indigo-500 bg-indigo-950/30 ring-2 ring-indigo-500/20 shadow-xs"
+              : "border-indigo-600 bg-indigo-50/15 ring-2 ring-indigo-600/5 shadow-xs" 
+            : isDark
+              ? "border-slate-850 bg-slate-900/60 text-slate-100 hover:border-slate-700"
+              : "border-slate-200 bg-white hover:border-slate-350"
         }`}
       >
         {/* Top line metadata */}
-        <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-50 pb-2">
+        <div className={`flex flex-wrap items-center justify-between gap-1.5 border-b pb-2 ${
+          isDark ? "border-slate-850" : "border-slate-50"
+        }`}>
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-black bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded uppercase tracking-wider border border-indigo-100/30">
+            <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider border ${
+              isDark 
+                ? "bg-indigo-950/40 text-indigo-400 border-indigo-950/50" 
+                : "bg-indigo-50 text-indigo-700 border-indigo-100/30"
+            }`}>
               {q.marks} Marks
             </span>
             <span className={`text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded ${
               q.difficulty === "Easy"
-                ? "text-emerald-700 bg-emerald-50 border border-emerald-100"
+                ? isDark
+                  ? "text-emerald-400 bg-emerald-950/20 border border-emerald-950/40"
+                  : "text-emerald-700 bg-emerald-50 border border-emerald-100"
                 : q.difficulty === "Medium"
-                  ? "text-amber-700 bg-amber-50 border border-amber-100"
-                  : "text-rose-700 bg-rose-50 border border-rose-100"
+                  ? isDark
+                    ? "text-amber-400 bg-amber-950/20 border border-amber-950/40"
+                    : "text-amber-700 bg-amber-50 border border-amber-100"
+                  : isDark
+                    ? "text-rose-400 bg-rose-950/20 border border-rose-950/40"
+                    : "text-rose-700 bg-rose-50 border border-rose-100"
             }`}>
               {q.difficulty}
             </span>
@@ -86,7 +112,9 @@ export default function App() {
                 ? "bg-emerald-500 border-emerald-500 text-white"
                 : qStatus === "doing"
                   ? "bg-amber-400 border-amber-400 text-white"
-                  : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200"
+                  : isDark
+                    ? "bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-indigo-400 hover:border-slate-750"
+                    : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200"
             }`}
           >
             <div className={`w-1 h-1 rounded-full ${
@@ -102,30 +130,48 @@ export default function App() {
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
               Concept Target:
             </span>
-            <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+              isDark ? "text-slate-300 bg-slate-800" : "text-slate-700 bg-slate-100"
+            }`}>
               {q.concept}
             </span>
           </div>
           <h4 
-            onClick={() => setActiveQuestion(q)}
-            className="text-xs.5 font-extrabold text-slate-850 hover:text-indigo-600 cursor-pointer leading-relaxed transition-colors mt-1"
+            onClick={() => {
+              setActiveQuestion(q);
+              // Save as last active question
+              if (currentSubject) {
+                localStorage.setItem(`last-active-question-${currentSubject.id}`, q.id);
+              }
+            }}
+            className={`text-xs.5 font-extrabold cursor-pointer leading-relaxed transition-colors mt-1 ${
+              isDark 
+                ? "text-slate-100 hover:text-indigo-400" 
+                : "text-slate-850 hover:text-indigo-600"
+            }`}
           >
             {q.question}
           </h4>
           {q.description && (
-            <p className="text-[10.5px] text-slate-400 leading-snug font-medium italic mt-1 border-l-2 border-slate-100 pl-2">
+            <p className="text-[10.5px] text-slate-400 leading-snug font-medium italic mt-1 border-l-2 border-slate-700 pl-2">
               💡 {q.description}
             </p>
           )}
         </div>
 
         {/* Meticulous 5-Year Timeline Occurrence Grid */}
-        <div className="bg-slate-50/80 p-2.5 rounded-lg border border-slate-150 space-y-1.5">
+        <div className={`p-2.5 rounded-lg border space-y-1.5 ${
+          isDark ? "bg-slate-950/60 border-slate-850" : "bg-slate-50/80 border-slate-150"
+        }`}>
           <div className="flex items-center justify-between">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
               Last 5 Years Paper Records:
             </span>
-            <span className="text-[10px] font-black text-slate-600 bg-white border border-slate-200/60 px-1.5 py-0.5 rounded">
+            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${
+              isDark 
+                ? "text-slate-300 bg-slate-900 border-slate-800" 
+                : "text-slate-600 bg-white border-slate-200/60"
+            }`}>
               Freq: {q.years.filter(y => yearsRange.includes(y)).length} / 5 Years
             </span>
           </div>
@@ -138,13 +184,15 @@ export default function App() {
                   className={`text-center py-1 rounded text-[9px] font-black transition-all border flex flex-col justify-between ${
                     isAsked 
                       ? "bg-emerald-500 border-emerald-500 text-white shadow-xs shadow-emerald-500/10 font-black" 
-                      : "bg-slate-100 border-slate-200/60 text-slate-400 font-bold"
+                      : isDark
+                        ? "bg-slate-900 border-slate-800 text-slate-500 font-bold"
+                        : "bg-slate-100 border-slate-200/60 text-slate-400 font-bold"
                   }`}
                   title={isAsked ? `Asked in final exam year ${yr}` : `Not asked in ${yr}`}
                 >
                   <span className="block opacity-90">{yr}</span>
                   <span className={`block text-[8px] mt-0.5 uppercase ${
-                    isAsked ? "text-emerald-100 font-extrabold" : "text-slate-350"
+                    isAsked ? "text-emerald-100 font-extrabold" : "text-slate-500"
                   }`}>
                     {isAsked ? "ASKED" : "N/A"}
                   </span>
@@ -155,31 +203,43 @@ export default function App() {
         </div>
 
         {/* Predictive scoring and bookmarks indicators */}
-        <div className="flex items-center justify-between text-[10px] border-t border-slate-100 pt-2.5">
+        <div className={`flex items-center justify-between text-[10px] border-t pt-2.5 ${
+          isDark ? "border-slate-850" : "border-slate-100"
+        }`}>
           <div className="flex items-center gap-1">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-extrabold text-emerald-600">
+            <span className="font-extrabold text-emerald-500">
               Sessional Recurrence: {q.predictedRecurrence}%
             </span>
           </div>
           
           {isNoteAttached && (
-            <span className="font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded text-[9px] border border-indigo-100/30">
+            <span className={`font-bold px-1.5 py-0.5 rounded text-[9px] border ${
+              isDark 
+                ? "text-indigo-400 bg-indigo-950/20 border-indigo-950/30" 
+                : "text-indigo-600 bg-indigo-50 border-indigo-100/30"
+            }`}>
               Study Notes Attached
             </span>
           )}
         </div>
 
         {/* Action button layout */}
-        <div className="flex items-center justify-between border-t border-slate-100 pt-2.5">
+        <div className={`flex items-center justify-between border-t pt-2.5 ${
+          isDark ? "border-slate-850" : "border-slate-100"
+        }`}>
           <button
             id={`bookmark-${q.id}`}
             onClick={() => toggleBookmark(q.id)}
-            className="text-slate-400 hover:text-indigo-600 p-1.5 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer border border-slate-200/60 bg-white"
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer border ${
+              isDark 
+                ? "text-slate-400 hover:text-indigo-400 border-slate-800 bg-slate-900" 
+                : "text-slate-400 hover:text-indigo-600 border-slate-200/60 bg-white"
+            }`}
             title="Toggle study shortlist bookmark"
           >
             {isBookmarked ? (
-              <BookmarkCheck className="w-4 h-4 text-indigo-600 fill-indigo-100" />
+              <BookmarkCheck className="w-4 h-4 text-indigo-500 fill-indigo-500/10" />
             ) : (
               <Bookmark className="w-4 h-4 text-slate-400" />
             )}
@@ -190,10 +250,13 @@ export default function App() {
             onClick={() => {
               setActiveQuestion(q);
               setIsExplainOpen(true);
+              if (currentSubject) {
+                localStorage.setItem(`last-active-question-${currentSubject.id}`, q.id);
+              }
             }}
             className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs px-3 py-2 rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-xs"
           >
-            <Sparkles className="w-3.5 h-3.5 text-indigo-200" />
+            <Sparkles className="w-3.5 h-3.5 text-indigo-250" />
             Solve with AI Tutor
           </button>
         </div>
@@ -320,11 +383,17 @@ export default function App() {
       })
     : [];
 
+  const isDark = theme === "dark";
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col text-slate-800 antialiased font-sans selection:bg-indigo-100 selection:text-indigo-900">
+    <div className={`min-h-screen flex flex-col antialiased font-sans transition-colors duration-200 selection:bg-indigo-500/20 selection:text-indigo-400 ${
+      isDark ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-800"
+    }`}>
       
       {/* Global Navigation Header */}
-      <header className="bg-white border-b border-slate-200/80 sticky top-0 z-40 shadow-xs print:hidden">
+      <header className={`border-b sticky top-0 z-40 shadow-sm print:hidden transition-colors ${
+        isDark ? "bg-slate-900 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-950"
+      }`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-md shadow-indigo-600/20">
@@ -332,18 +401,38 @@ export default function App() {
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <h1 className="text-md font-extrabold tracking-tight text-slate-900">BacklogAI</h1>
-                <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-1.5 py-0.5 rounded uppercase">v2</span>
+                <h1 className="text-md font-extrabold tracking-tight">BacklogAI</h1>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                  isDark ? "bg-slate-850 text-slate-400" : "bg-slate-100 text-slate-500"
+                }`}>v2</span>
               </div>
               <p className="text-[10px] text-slate-400 font-medium">Statistical Analysis & Active Recall Cramming Engine</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            {/* Theme Toggle Button */}
+            <button
+              id="theme-toggle-btn"
+              onClick={() => {
+                const next = theme === "dark" ? "light" : "dark";
+                setTheme(next);
+                localStorage.setItem("theme", next);
+              }}
+              className={`p-2 rounded-lg border transition-colors cursor-pointer text-xs font-black uppercase flex items-center gap-1.5 ${
+                isDark 
+                  ? "bg-slate-800 border-slate-700 text-yellow-400 hover:bg-slate-750" 
+                  : "bg-slate-100 border-slate-250 text-slate-600 hover:bg-slate-200"
+              }`}
+              title="Toggle theme visualizer"
+            >
+              {isDark ? "☀️ Light" : "🌙 Dark"}
+            </button>
+
             {!hasApiKey && (
-              <div className="hidden md:flex items-center gap-2 bg-amber-50 border border-amber-200/60 px-3 py-1.5 rounded-lg text-[11px] text-amber-700 animate-pulse">
+              <div className="hidden md:flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-lg text-[11px] text-amber-500 animate-pulse">
                 <AlertCircle className="w-3.5 h-3.5" />
-                <span>AI Tutoring Offline (Secret Key is Missing)</span>
+                <span>AI Tutoring Offline</span>
               </div>
             )}
             
@@ -351,7 +440,11 @@ export default function App() {
               <button
                 id="btn-nav-reset"
                 onClick={handleResetSubjectSelection}
-                className="text-xs font-semibold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg transition-colors cursor-pointer"
+                className={`text-xs font-semibold px-3 py-2 rounded-lg transition-colors cursor-pointer ${
+                  isDark 
+                    ? "bg-slate-800 hover:bg-slate-700 text-slate-200" 
+                    : "bg-slate-150 hover:bg-slate-200 text-slate-700"
+                }`}
               >
                 Change Subject
               </button>
@@ -365,6 +458,12 @@ export default function App() {
         
         {/* Selection Screen (No Active Subject) */}
         {!currentSubject ? (
+          <OnboardingFlow 
+            onSelectSubject={handleSelectSubject}
+            onFastTrack={handleFastTrack}
+            theme={theme}
+          />
+        ) : false ? (
           <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-200">
             
             {/* Greeting / Philosophy Intro */}
@@ -610,7 +709,9 @@ export default function App() {
           <div className="space-y-6 animate-in fade-in duration-200">
             
             {/* Breadcrumb Header */}
-            <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 print:hidden">
+            <div className={`rounded-xl border p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 print:hidden transition-colors ${
+              isDark ? "bg-slate-900 border-slate-850 text-slate-100" : "bg-white border-slate-200/80"
+            }`}>
               <div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{univ}</span>
@@ -621,9 +722,13 @@ export default function App() {
                   <ChevronRight className="w-3 h-3 text-slate-300" />
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sem {sem}</span>
                 </div>
-                <h2 className="text-xl font-black text-slate-900 mt-1 flex items-center gap-2">
+                <h2 className={`text-xl font-black mt-1 flex items-center gap-2 ${
+                  isDark ? "text-slate-100" : "text-slate-900"
+                }`}>
                   {currentSubject.name} 
-                  <span className="text-xs font-semibold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded border border-indigo-100/30">
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${
+                    isDark ? "bg-indigo-950/40 text-indigo-400 border-indigo-950/50" : "bg-indigo-50 text-indigo-600 border-indigo-100/30"
+                  }`}>
                     {currentSubject.code}
                   </span>
                 </h2>
@@ -631,16 +736,24 @@ export default function App() {
               <button
                 id="btn-nav-reset-body"
                 onClick={handleResetSubjectSelection}
-                className="text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100/60 border border-indigo-100 px-3 py-2 rounded-lg transition-colors cursor-pointer"
+                className={`text-xs font-semibold border px-3 py-2 rounded-lg transition-colors cursor-pointer ${
+                  isDark 
+                    ? "text-indigo-400 bg-indigo-950/20 border-indigo-950/40 hover:bg-indigo-950/40" 
+                    : "text-indigo-600 bg-indigo-50 hover:bg-indigo-100/60 border-indigo-100"
+                }`}
               >
                 Reset Configuration
               </button>
             </div>
 
             {/* Custom Ingestion / Active Subject Selector Dropdown Panel (Answers "where is the subject selector") */}
-            <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-xs space-y-3.5 print:hidden">
+            <div className={`rounded-xl border p-4 shadow-xs space-y-3.5 print:hidden transition-colors ${
+              isDark ? "bg-slate-900 border-slate-850" : "bg-white border-slate-200/80"
+            }`}>
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest flex items-center gap-1.5">
+                <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 ${
+                  isDark ? "text-indigo-400" : "text-indigo-700"
+                }`}>
                   <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
                   Active Custom Ingestion Selector
                 </span>
@@ -757,51 +870,88 @@ export default function App() {
               </div>
             </div>
 
+            {/* Core Diagnostic Dashboard Insights */}
+            <DashboardInsights
+              subject={currentSubject}
+              questionStatus={questionStatus}
+              onSelectQuestion={(q, modName) => {
+                setActiveQuestion(q);
+                setIsExplainOpen(true);
+              }}
+              theme={theme}
+            />
+
             {/* Dashboard tabs */}
-            <div className="flex border-b border-slate-200 overflow-x-auto print:hidden">
+            <div className={`flex border-b overflow-x-auto print:hidden no-scrollbar ${
+              isDark ? "border-slate-800" : "border-slate-200"
+            }`}>
               <button
                 id="tab-view-shortlist"
                 onClick={() => setActiveTab("shortlist")}
-                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                className={`flex items-center gap-2 px-5 py-3 text-xs.5 font-extrabold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                   activeTab === "shortlist"
-                    ? "border-indigo-600 text-indigo-600"
-                    : "border-transparent text-slate-500 hover:text-slate-700"
+                    ? isDark ? "border-indigo-400 text-indigo-400" : "border-indigo-600 text-indigo-600 font-black"
+                    : isDark ? "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-800" : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
                 }`}
               >
                 <Sparkles className="w-4 h-4" />
-                Fast-Track Backlog Shortlist
+                Sessional Shortlist
               </button>
               <button
                 id="tab-view-questions"
                 onClick={() => setActiveTab("questions")}
-                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                className={`flex items-center gap-2 px-5 py-3 text-xs.5 font-extrabold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                   activeTab === "questions"
-                    ? "border-indigo-600 text-indigo-600"
-                    : "border-transparent text-slate-500 hover:text-slate-700"
+                    ? isDark ? "border-indigo-400 text-indigo-400" : "border-indigo-600 text-indigo-600 font-black"
+                    : isDark ? "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-800" : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
                 }`}
               >
                 <FileText className="w-4 h-4" />
                 Statistical Question Bank ({filteredQuestions.length})
               </button>
               <button
+                id="tab-view-flashcards"
+                onClick={() => setActiveTab("flashcards")}
+                className={`flex items-center gap-2 px-5 py-3 text-xs.5 font-extrabold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                  activeTab === "flashcards"
+                    ? isDark ? "border-indigo-400 text-indigo-400" : "border-indigo-600 text-indigo-600 font-black"
+                    : isDark ? "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-800" : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                }`}
+              >
+                <Layers className="w-4 h-4" />
+                Active Recall Flashcards
+              </button>
+              <button
+                id="tab-view-mocktests"
+                onClick={() => setActiveTab("mock-tests")}
+                className={`flex items-center gap-2 px-5 py-3 text-xs.5 font-extrabold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                  activeTab === "mock-tests"
+                    ? isDark ? "border-indigo-400 text-indigo-400" : "border-indigo-600 text-indigo-600 font-black"
+                    : isDark ? "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-800" : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                }`}
+              >
+                <Award className="w-4 h-4" />
+                Time-Boxed Mock Tests
+              </button>
+              <button
                 id="tab-view-planner"
                 onClick={() => setActiveTab("study-plan")}
-                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                className={`flex items-center gap-2 px-5 py-3 text-xs.5 font-extrabold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                   activeTab === "study-plan"
-                    ? "border-indigo-600 text-indigo-600"
-                    : "border-transparent text-slate-500 hover:text-slate-700"
+                    ? isDark ? "border-indigo-400 text-indigo-400" : "border-indigo-600 text-indigo-600 font-black"
+                    : isDark ? "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-800" : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
                 }`}
               >
                 <Clock className="w-4 h-4" />
-                Custom Study Timeline Generator
+                Custom Study Timeline
               </button>
               <button
                 id="tab-view-vault"
                 onClick={() => setActiveTab("sessional-vault")}
-                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                className={`flex items-center gap-2 px-5 py-3 text-xs.5 font-extrabold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                   activeTab === "sessional-vault"
-                    ? "border-indigo-600 text-indigo-600"
-                    : "border-transparent text-slate-500 hover:text-slate-700"
+                    ? isDark ? "border-indigo-400 text-indigo-400" : "border-indigo-600 text-indigo-600 font-black"
+                    : isDark ? "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-800" : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
                 }`}
               >
                 <BookOpen className="w-4 h-4" />
@@ -940,6 +1090,10 @@ export default function App() {
                       })}
                     </div>
                   </>
+                ) : activeTab === "flashcards" ? (
+                  <FlashcardsView subject={currentSubject} theme={theme} />
+                ) : activeTab === "mock-tests" ? (
+                  <MockTestView subject={currentSubject} theme={theme} />
                 ) : activeTab === "study-plan" ? (
                   /* Custom Timeline/Plan Card */
                   <StudyPlanCard subject={currentSubject} />

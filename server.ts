@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { SUBJECTS_DATA, EXAM_SESSIONS } from "./src/data/backlogDataset.js";
 
 dotenv.config();
 
@@ -213,6 +214,141 @@ IMPORTANT: Return ONLY the JSON array inside a standard JSON response block. Do 
   } catch (err: any) {
     console.error("Gemini Quiz Error:", err);
     res.status(500).json({ error: err.message || "Failed to generate quiz." });
+  }
+});
+
+
+// ==========================================
+// SRS SECTION 48 COMPLIANT API CONTRACTS
+// ==========================================
+
+// 48.1 GET /api/subjects (Returns sessional catalog or filtered catalog)
+app.get("/api/subjects", (req, res) => {
+  const { university, scheme, branch, semester } = req.query;
+  let data = SUBJECTS_DATA;
+
+  if (university) {
+    data = data.filter(s => s.university === String(university).toUpperCase());
+  }
+  if (scheme) {
+    data = data.filter(s => s.scheme === String(scheme));
+  }
+  if (branch) {
+    data = data.filter(s => s.branch === String(branch).toUpperCase());
+  }
+  if (semester) {
+    data = data.filter(s => s.semester === Number(semester));
+  }
+
+  res.json({ subjects: data });
+});
+
+// 48.2 GET /api/papers (Returns sessional examination history)
+app.get("/api/papers", (req, res) => {
+  res.json({ papers: EXAM_SESSIONS });
+});
+
+// 48.3 GET /api/questions (Returns sessional questions of a specific subject)
+app.get("/api/questions", (req, res) => {
+  const { subjectId } = req.query;
+  if (!subjectId) {
+    return res.status(400).json({ error: "Missing parameter: subjectId" });
+  }
+
+  const subject = SUBJECTS_DATA.find(s => s.id === subjectId);
+  if (!subject) {
+    return res.status(404).json({ error: "Subject not found in backlog registry" });
+  }
+
+  res.json({ questions: subject.questions });
+});
+
+// 48.4 GET /api/predictions (Returns computed recurrence metrics and risk levels)
+app.get("/api/predictions", (req, res) => {
+  const { subjectId } = req.query;
+  if (!subjectId) {
+    return res.status(400).json({ error: "Missing parameter: subjectId" });
+  }
+
+  const subject = SUBJECTS_DATA.find(s => s.id === subjectId);
+  if (!subject) {
+    return res.status(404).json({ error: "Subject not found" });
+  }
+
+  // Pre-calculate risk metrics for sessional analysis
+  const predictions = subject.questions.map(q => {
+    let riskTier = "STANDARD";
+    if (q.predictedRecurrence >= 85) {
+      riskTier = "CRITICAL";
+    } else if (q.predictedRecurrence >= 65) {
+      riskTier = "HIGH";
+    } else if (q.predictedRecurrence >= 35) {
+      riskTier = "MEDIUM";
+    }
+
+    return {
+      questionId: q.id,
+      concept: q.concept,
+      predictedRecurrence: q.predictedRecurrence,
+      riskTier,
+      weightCoefficient: parseFloat((q.predictedRecurrence / 100).toFixed(2)),
+      remediationStrategy: q.description || "Review core proof and equations."
+    };
+  });
+
+  res.json({
+    subjectId: subject.id,
+    subjectCode: subject.code,
+    predictions
+  });
+});
+
+// 48.7 POST /api/gemini/chat (Active chat with custom dialogue and citation formatting)
+app.post("/api/gemini/chat", async (req, res) => {
+  try {
+    const { question, concept, history, message } = req.body;
+    if (!question || !message) {
+      return res.status(400).json({ error: "Missing required parameters: question, message" });
+    }
+
+    const ai = getAIClient();
+    const systemPrompt = `You are a supportive, legendary university backlog mentor. You are conducting an active recall chat with a student preparing for their exam.
+The active exam question is: "${question}" (Concept: "${concept}").
+Always answer clear, concise, and academically precise.
+IMPORTANT CITATION RULE:
+Whenever you refer to the active question, the concept, or any specific exam rule, you MUST include a citation chip in format: "[Citation: ${concept}]" or "[Citation: Exam Q]". Do not just answer in plain prose without citation.
+Keep formatting elegant and clean using markdown.`;
+
+    // Map historical dialog for Gemini API contents
+    const contents: any[] = [];
+    if (history && Array.isArray(history)) {
+      history.forEach((msg: any) => {
+        contents.push({
+          role: msg.role === "user" ? "user" : "model",
+          parts: [{ text: msg.text }]
+        });
+      });
+    }
+    
+    // Add active prompt message
+    contents.push({
+      role: "user",
+      parts: [{ text: message }]
+    });
+
+    const result = await ai.models.generateContent({
+      model: "gemini-3.6-flash",
+      contents,
+      config: {
+        systemInstruction: systemPrompt,
+        temperature: 0.7,
+      },
+    });
+
+    res.json({ response: result.text || "I'm sorry, I could not generate a response. Please try again." });
+  } catch (err: any) {
+    console.error("Gemini Chat Error:", err);
+    res.status(500).json({ error: err.message || "Failed to contact chat server." });
   }
 });
 

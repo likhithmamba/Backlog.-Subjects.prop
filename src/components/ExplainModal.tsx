@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, BookOpen, PenTool, Sparkles, HelpCircle, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { X, BookOpen, PenTool, Sparkles, HelpCircle, CheckCircle, AlertCircle, Loader2, MessageSquare, Send } from "lucide-react";
 import { Question } from "../data/backlogDataset";
 
 interface ExplainModalProps {
@@ -18,12 +18,18 @@ interface QuizItem {
 }
 
 export default function ExplainModal({ question, subjectName, moduleName, onClose }: ExplainModalProps) {
-  const [activeTab, setActiveTab] = useState<"explain" | "derive" | "quiz">("explain");
+  const [activeTab, setActiveTab] = useState<"explain" | "derive" | "quiz" | "chat">("explain");
   
   // States for API contents
   const [explanation, setExplanation] = useState<string>("");
   const [derivation, setDerivation] = useState<string>("");
   const [quizList, setQuizList] = useState<QuizItem[]>([]);
+  
+  // Chat state
+  const [chatHistory, setChatHistory] = useState<{ role: "user" | "assistant"; text: string }[]>([]);
+  const [chatInput, setChatInput] = useState<string>("");
+  const [chatLoading, setChatLoading] = useState<boolean>(false);
+  const [chatError, setChatError] = useState<string>("");
   
   // Loading states
   const [loading, setLoading] = useState<boolean>(false);
@@ -39,6 +45,7 @@ export default function ExplainModal({ question, subjectName, moduleName, onClos
 
   const fetchContent = async () => {
     // If we already have the content, don't refetch
+    if (activeTab === "chat") return; // Chat is interactive
     if (activeTab === "explain" && explanation) return;
     if (activeTab === "derive" && derivation) return;
     if (activeTab === "quiz" && quizList.length > 0) return;
@@ -101,6 +108,46 @@ export default function ExplainModal({ question, subjectName, moduleName, onClos
     setRevealedAnswers(prev => ({ ...prev, [quizId]: true }));
   };
 
+  const handleSendChatMessage = async (msgText: string) => {
+    if (!msgText.trim() || chatLoading) return;
+
+    const userMsg = msgText.trim();
+    const updatedHistory = [...chatHistory, { role: "user" as const, text: userMsg }];
+    
+    setChatHistory(updatedHistory);
+    setChatInput("");
+    setChatLoading(true);
+    setChatError("");
+
+    try {
+      const res = await fetch("/api/gemini/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: question.question,
+          concept: question.concept,
+          message: userMsg,
+          history: chatHistory.map(h => ({ role: h.role, text: h.text }))
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error(`Server returned ${res.status}`);
+      }
+
+      const data = await res.json();
+      setChatHistory(prev => [
+        ...prev,
+        { role: "assistant" as const, text: data.response || "No reply generated." }
+      ]);
+    } catch (err: any) {
+      console.error(err);
+      setChatError(err.message || "Failed to communicate with AI Tutor chat backend.");
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   // Helper to safely split markdown into clean paragraph structures for nicer light theme reading
   const renderMarkdown = (text: string) => {
     if (!text) return null;
@@ -139,8 +186,18 @@ export default function ExplainModal({ question, subjectName, moduleName, onClos
   };
 
   const formatBoldText = (text: string) => {
-    const parts = text.split(/(\*\*.*?\*\*)/g);
+    // Regex matches bold markers and citation chips [Citation: ...]
+    const parts = text.split(/(\[Citation:.*?\]|\*\*.*?\*\*)/g);
     return parts.map((part, i) => {
+      if (part.startsWith("[Citation:") && part.endsWith("]")) {
+        const citationVal = part.replace("[Citation:", "").replace("]", "").trim();
+        return (
+          <span key={i} className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 border border-emerald-500/15 text-[10px] font-black px-1.5 py-0.5 rounded ml-1 mr-1">
+            <BookOpen className="w-2.5 h-2.5" />
+            {citationVal}
+          </span>
+        );
+      }
       if (part.startsWith("**") && part.endsWith("**")) {
         return <strong key={i} className="font-semibold text-slate-900">{part.slice(2, -2)}</strong>;
       }
@@ -213,6 +270,18 @@ export default function ExplainModal({ question, subjectName, moduleName, onClos
           >
             <HelpCircle className="w-4 h-4" />
             Active Recall Quiz
+          </button>
+          <button
+            id="tab-btn-chat"
+            onClick={() => setActiveTab("chat")}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all cursor-pointer ${
+              activeTab === "chat"
+                ? "border-indigo-600 text-indigo-600"
+                : "border-transparent text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" />
+            Ask AI Tutor
           </button>
         </div>
 
@@ -348,6 +417,112 @@ export default function ExplainModal({ question, subjectName, moduleName, onClos
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {activeTab === "chat" && (
+                <div className="space-y-4 flex flex-col h-[50vh]">
+                  {/* Info banner */}
+                  <div className="bg-indigo-50 border border-indigo-100 p-3.5 rounded-lg flex items-center gap-2 shrink-0">
+                    <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span className="text-xs font-semibold text-indigo-900">
+                      Active dialog linked to concept: <strong className="text-indigo-950 font-bold">{question.concept}</strong>. Answers are traced with citations.
+                    </span>
+                  </div>
+
+                  {/* Chat Bubbles Scroll Area */}
+                  <div className="flex-1 overflow-y-auto space-y-4 pr-1 p-3 bg-slate-100/50 rounded-xl border border-slate-150">
+                    {chatHistory.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400 space-y-2">
+                        <MessageSquare className="w-8 h-8 text-indigo-400/80 animate-pulse" />
+                        <h4 className="text-xs.5 font-bold text-slate-650">Ask your Backlog Coach anything</h4>
+                        <p className="text-[11px] text-slate-400 max-w-xs">
+                          Inquire about technical derivations, diagram blocks, or exam grading metrics. Click on helper recommendations below to start!
+                        </p>
+                      </div>
+                    ) : (
+                      chatHistory.map((msg, index) => {
+                        const isUser = msg.role === "user";
+                        return (
+                          <div key={index} className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-in fade-in duration-100`}>
+                            <div className={`max-w-[85%] rounded-2xl p-4 text-xs.5 leading-relaxed ${
+                              isUser 
+                                ? "bg-indigo-600 text-white rounded-br-none shadow-sm" 
+                                : "bg-white border border-slate-200/85 text-slate-700 rounded-bl-none shadow-2xs"
+                            }`}>
+                              <span className="block text-[9px] font-bold uppercase opacity-60 mb-1">
+                                {isUser ? "You" : "AI Backlog Mentor"}
+                              </span>
+                              <div className="whitespace-pre-line font-sans">
+                                {isUser ? msg.text : formatBoldText(msg.text)}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+
+                    {chatLoading && (
+                      <div className="flex justify-start">
+                        <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-none p-4 flex items-center gap-2 shadow-2xs">
+                          <Loader2 className="w-4 h-4 text-indigo-600 animate-spin" />
+                          <span className="text-[10.5px] font-semibold text-slate-400">Mentor is drafting answer...</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {chatError && (
+                      <div className="p-3 bg-rose-50 border border-rose-100 text-rose-700 text-xs rounded-lg font-medium">
+                        {chatError}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Dynamic Starter recommendation pills */}
+                  <div className="flex flex-wrap gap-2 py-1 shrink-0">
+                    <button
+                      id="pill-suggest-analogy"
+                      onClick={() => handleSendChatMessage("Provide a simple, real-world analogy to explain this concept.")}
+                      className="text-[10px] font-black uppercase tracking-wider bg-white border border-slate-200 hover:border-indigo-400 text-slate-550 hover:text-indigo-600 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                    >
+                      💡 Request Analogy
+                    </button>
+                    <button
+                      id="pill-suggest-traps"
+                      onClick={() => handleSendChatMessage("What are the most common student traps or mistakes to avoid on this exam question?")}
+                      className="text-[10px] font-black uppercase tracking-wider bg-white border border-slate-200 hover:border-indigo-400 text-slate-550 hover:text-indigo-600 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                    >
+                      ⚠️ Common Traps
+                    </button>
+                    <button
+                      id="pill-suggest-proof"
+                      onClick={() => handleSendChatMessage("List the exact 3-step proof procedure required by VTU university evaluation sheet.")}
+                      className="text-[10px] font-black uppercase tracking-wider bg-white border border-slate-200 hover:border-indigo-400 text-slate-550 hover:text-indigo-600 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                    >
+                      📐 Proof Steps
+                    </button>
+                  </div>
+
+                  {/* Input form */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <input
+                      type="text"
+                      id="chat-concept-input"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleSendChatMessage(chatInput); }}
+                      placeholder="Inquire about formulas, equations, definitions, derivations..."
+                      className="flex-1 rounded-xl border border-slate-250 bg-white px-3.5 py-2.5 text-xs outline-none focus:border-indigo-500 font-sans"
+                    />
+                    <button
+                      id="btn-send-chat"
+                      disabled={!chatInput.trim() || chatLoading}
+                      onClick={() => handleSendChatMessage(chatInput)}
+                      className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white p-2.5 rounded-xl transition-all shadow-md shadow-indigo-600/10 cursor-pointer active:scale-95"
+                    >
+                      <Send className="w-4 h-4 fill-current" />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
