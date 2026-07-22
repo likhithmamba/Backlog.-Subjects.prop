@@ -1,0 +1,6 @@
+{
+  "name": "BacklogAI",
+  "description": "An offline-capable, data-driven analysis and prediction engine for university backlog exams featuring statistical recurrence forecasting and server-side Gemini explanations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
